@@ -4,7 +4,7 @@ import type { KeyHandler } from '@solidtv/solid'
 import ActionButton from '../components/ActionButton'
 import { posterUrl } from '../services/tmdb'
 import { selectedMovie } from '../state/selection'
-import { CLEAR_STREAM, DRM_STREAM } from '../state/playback'
+import { STREAMS } from '../state/playback'
 import { resolveHost } from '../host'
 import { colors, layout } from '../theme'
 
@@ -70,11 +70,11 @@ const Details: Component = () => {
     later(150, () => setPressedIndex(-1))
     if (buttonIndex() === 0) {
       if (host.player) {
-        // The DRM stream where the runtime has Widevine (Shaka on the web), the clear HLS stream
-        // otherwise (Apple TV's AVPlayer: HLS + FairPlay only) or when the DRM one fails to
-        // start. AVPlayer owns the remote while it is up; on the web Enter pauses and Back stops.
+        // Each runtime picks the first stream it can play: Widevine DASH on the web, FairPlay
+        // HLS on Apple TV, clear HLS where neither works or the DRM one fails to start.
+        // AVPlayer owns the remote while it is up; on the web Enter pauses and Back stops.
         setPlaying(true)
-        host.player.play([DRM_STREAM, CLEAR_STREAM], () => setPlaying(false))
+        host.player.play(STREAMS, () => setPlaying(false))
       } else {
         setPlayHintVisible(true)
         later(1800, () => setPlayHintVisible(false))

@@ -20,8 +20,10 @@ Four layers, one-way data flow:
    manager listens for keys, how an asset path becomes a URL, how the two MSDF fonts are
    registered, and the video player (a `<video>` element with Shaka Player / hls.js on the web, a
    full-screen `AVPlayerViewController` on Apple TV). `play()` takes an ordered list of streams
-   and plays the first the runtime can start: DASH + Widevine where a CDM exists, the clear HLS
-   stream everywhere else, so one details page serves both. The web host is derived from `window`; the tvOS boot file
+   and plays the first the runtime can start: DASH + Widevine where a CDM exists, HLS + FairPlay
+   on Apple TV (`nativescript/app/fairplay.ts` does the certificate/SPC/CKC exchange through an
+   `AVContentKeySession`), clear HLS where neither works. One details page, no platform checks
+   in `src/`. The web host is derived from `window`; the tvOS boot file
    (`nativescript/app/app.ts`) builds one from `@solidtv/nativescript`'s `rendererSettings`,
    `KeyBridge` (Siri Remote → key events), `loadSdfFont` and the lifecycle binding, then
    imports `src/index` unchanged. `src/` never imports NativeScript.
@@ -104,9 +106,9 @@ history stack and `hashchange` event it reads (`nativescript/app/shims.ts`), so
 
 ## Differences from the L3 app
 
-- **Playback is real**: "Play now" plays a Widevine-protected DASH stream on the web and the
-  clear Big Buck Bunny HLS on Apple TV (no Widevine on Apple platforms) through the runtime's
-  native player (L3 showed a hint). Back/Menu stops it and returns to the details screen.
+- **Playback is real and DRM-protected on both**: "Play now" plays Widevine DASH on the web
+  and FairPlay HLS on Apple TV, through each runtime's native player (L3 showed a hint).
+  Back/Menu stops it and returns to the details screen.
 - **One page per row, then loop** (product direction, as in the LNG2 build): predictable
   network cost and a loop the user actually encounters, instead of L3's fetch-ahead.
 - **Menu contract** (tvOS-mandated): a handled Back/Menu calls `preventDefault()` (details → grid, grid →

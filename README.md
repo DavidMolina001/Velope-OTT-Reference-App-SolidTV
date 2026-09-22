@@ -7,8 +7,8 @@ inside NativeScript and draws into a native WebGL view through `@solidtv/natives
 
 Same experience as the Lightning 3 / Blits reference build: keyboard- or Siri-Remote-driven
 movie browser against The Movie Database with a genre nav, 12 carousel rows of 20 titles
-that loop seamlessly, a details screen with exact back-with-state and real playback (DASH + Widevine
-on the web, native AVPlayer on Apple TV), bounded memory, coalesced input, and visible
+that loop seamlessly, a details screen with exact back-with-state and real DRM playback (Widevine on the
+web, FairPlay on Apple TV), bounded memory, coalesced input, and visible
 loading/error states throughout.
 
 ## Web
@@ -96,6 +96,16 @@ globally.
    `zsh nativescript/scripts/run-sim.sh <udid> <out-dir>` to install, launch, stream the unified
    log until the app reports `APP rendered`, and take a screenshot.
 
+On a **device**, where the Siri Remote cannot be scripted, launch with `VELOPE_PLAY=1` to start
+playback straight after boot and read the result from the app's own log:
+
+```sh
+xcrun devicectl device process launch --device <udid> --environment-variables '{"VELOPE_PLAY":"1"}' com.edinburghanalytics.velopetv
+xcrun devicectl device copy from --device <udid> --domain-type appDataContainer \
+  --domain-identifier com.edinburghanalytics.velopetv \
+  --source Library/Caches/velope-log.txt --destination ./device-log.txt
+```
+
 Xcode 27 ships no Simulator.app (the simulators run headless; `xcrun simctl io <udid>
 screenshot out.png` captures the screen). Real Siri Remote presses can be scripted through the
 XCUITest driver in `nativescript/remote-driver` (generate its project once with
@@ -129,20 +139,34 @@ team; the export to App Store Connect has not been exercised by this build.
 
 ### What plays
 
-`src/state/playback.ts` lists two streams, tried in order:
+DRM is the point here, and no single stream satisfies both runtimes: Apple's players know only
+FairPlay over HLS, everything else knows Widevine. So `src/state/playback.ts` lists three
+streams and each runtime plays the first one it can:
 
-1. **DASH with Widevine DRM** (castLabs DRMtoday staging demo, `index.mpd` + the
-   `license-proxy-widevine/cenc/?specConform=true` licence URL), through Shaka Player. Plays
-   in browsers with a Widevine CDM: Chrome, Edge, Firefox, the LG/Samsung TV browsers.
-2. **Clear HLS** (Big Buck Bunny, Mux public test stream): the fallback wherever Widevine is
-   unavailable. Safari has no Widevine (FairPlay only), and Apple TV's `AVPlayerViewController`
-   plays HLS/FairPlay only, no DASH and no Widevine, so those get this stream. So does a browser
-   whose licence request fails.
+1. **DASH + Widevine** (castLabs DRMtoday staging demo), through Shaka Player. Browsers with a
+   Widevine CDM: Chrome, Edge, Firefox, the LG/Samsung TV browsers.
+2. **HLS + FairPlay** (EZDRM public demo), through an `AVContentKeySession`. Apple TV only.
+3. **Clear HLS** (Big Buck Bunny, Mux public test stream), wherever neither DRM works: Safari
+   (no Widevine), the tvOS Simulator (no FairPlay), or a failed licence request.
 
-On the web the player asks EME for Widevine before loading, and moves to the next stream when
-a candidate fails to start (the console says which one played). On Apple TV the system player
-owns the Siri Remote: scrub and pause as in any tvOS app, Menu returns to the details screen.
-Both libraries (`shaka-player`, `hls.js`) load on demand and are excluded from the tvOS bundle.
+The web player asks EME for Widevine before loading; the tvOS player watches the
+`AVPlayerItem` status and moves to the next stream if an item fails. Either way the console
+names the stream that played.
+
+**FairPlay on Apple TV** is handled in `nativescript/app/fairplay.ts`: the playlist's
+`#EXT-X-KEY` points at a `skd://` URI, the key session hands over a request, the app turns it
+into an SPC with the provider's application certificate, POSTs that to the licence server and
+feeds the CKC back. To point it at your own provider, replace `FAIRPLAY_STREAM` with their
+playlist, certificate URL and licence URL; if their licence server needs auth headers or a
+form-encoded body, that goes in `request()` in the same file.
+
+FairPlay needs the device's secure key path, which **the tvOS Simulator does not have** (it
+answers "FairPlay Streaming is not supported on this platform"), so the simulator always shows
+the clear fallback. Verify FairPlay on real hardware.
+
+On Apple TV the system player owns the Siri Remote: scrub and pause as in any tvOS app, Menu
+returns to the details screen. Both web libraries (`shaka-player`, `hls.js`) load on demand and
+are excluded from the tvOS bundle.
 
 Focus starts on **All** in the nav. Holding an arrow key scrolls quickly; repeats are
 coalesced (100 ms input throttle) so navigation can never flood the render loop.
@@ -186,8 +210,8 @@ SolidTV demo ran at 60 fps on an Apple TV HD. Measure performance on hardware.
 ## Known limitations
 
 - **Menu exits from the nav** (see Controls), as tvOS requires.
-- **No Widevine on Apple devices**: the DRM stream plays on the web only; Apple TV and Safari
-  get the clear HLS fallback. FairPlay would need a certificate and licence service of its own.
+- **Each platform gets its own DRM**: Widevine on the web, FairPlay on Apple TV, and no single
+  stream serves both. The tvOS Simulator cannot do FairPlay at all and shows clear HLS.
 - Everything else is identical to the L3 app, except that this build plays a real stream and
   loops 20 titles per row (product direction) where L3 showed a hint and fetched ahead.
 - The simulator has no real GPU or texture-memory numbers.
@@ -219,11 +243,12 @@ src/
   pages/Details.tsx      Poster, metadata, mock action buttons, back handling
   components/            Prop-driven view components (no state of their own beyond visuals)
   state/selection.ts     The title handed from Home to Details
-  state/playback.ts      The streams Play now tries (DASH+Widevine, then clear HLS)
+  state/playback.ts      The streams Play now tries (Widevine DASH, FairPlay HLS, clear HLS)
   debug.ts               Dev-only hooks (__velope: state, node count)
 nativescript/
   app/app.ts             tvOS boot: canvas, KeyBridge, remote, lifecycle -> AppHost -> ../src
   app/shims.ts           window.location/history/hashchange for the HashRouter
+  app/fairplay.ts        FairPlay key delivery (AVContentKeySession: certificate, SPC, CKC)
   webpack.config.js      Bundles ../src for the runtime; defines import.meta.env from ../.env
   App_Resources/         Info.plist (UIScene manifest, local networking), xcconfig
   scripts/               tvos.sh, run-sim.sh, remote-sim.sh, icloud-shadow.sh

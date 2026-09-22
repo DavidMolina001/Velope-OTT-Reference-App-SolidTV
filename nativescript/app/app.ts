@@ -10,6 +10,8 @@ import { isTvOS } from '@nativescript/core/platform'
 import { Canvas } from '@nativescript/canvas'
 import { KeyBridge, bindLifecycle, bindRemote, loadSdfFont, rendererSettings, stubTarget } from '@solidtv/nativescript'
 import type { AppHost, AppPlayer } from '../../src/host.types'
+import { createFairPlaySession, type FairPlaySession } from './fairplay'
+import { STREAMS } from '../../src/state/playback'
 
 // On a device the CLI cannot stream the console: every line also goes to
 // Library/Caches/velope-log.txt in the app's container, for `xcrun devicectl device copy from`
@@ -85,6 +87,15 @@ function boot(canvas: Canvas): void {
   }
   host.player = tvPlayer()
   globalThis.__VELOPE_HOST__ = host
+  // Device diagnostics: `xcrun devicectl device process launch --environment-variables
+  // '{"VELOPE_PLAY":"1"}'` starts playback straight after boot, so the DRM path can be checked
+  // on hardware without driving the UI (the Siri Remote cannot be scripted on a device).
+  if (NSProcessInfo.processInfo.environment.objectForKey('VELOPE_PLAY')) {
+    setTimeout(() => {
+      console.log('PLAYER autoplay (VELOPE_PLAY)')
+      host.player?.play(STREAMS, () => console.log('PLAYER autoplay closed'))
+    }, 3000)
+  }
   // The app's own entry, unchanged: it reads the host from the global set above.
   import('../../src/index')
     .then(() => console.log('ENTRY loaded'))
@@ -96,37 +107,46 @@ function boot(canvas: Canvas): void {
 // Full-screen AVPlayerViewController over the app. It owns the Siri Remote while presented
 // (play/pause, scrubbing, Menu to leave); the app learns it is gone by polling the presentation,
 // and tears it down itself when the item plays to its end.
+//
+// Streams are tried in order: the first candidate this runtime can play is loaded, and if its
+// item fails (a FairPlay licence this box cannot get, a dead URL) the next one takes over in
+// the same presented player.
 function tvPlayer(): AppPlayer {
   let controller: AVPlayerViewController | undefined
   let poll: ReturnType<typeof setInterval> | undefined
+  let statusPoll: ReturnType<typeof setInterval> | undefined
   let endObserver: unknown
+  let fairplay: FairPlaySession | undefined
+  const clearStatusPoll = () => {
+    if (statusPoll !== undefined) clearInterval(statusPoll)
+    statusPoll = undefined
+  }
   const cleanup = () => {
     if (poll !== undefined) clearInterval(poll)
     poll = undefined
+    clearStatusPoll()
     if (endObserver) NSNotificationCenter.defaultCenter.removeObserver(endObserver)
     endObserver = undefined
+    fairplay?.dispose()
+    fairplay = undefined
     controller = undefined
   }
   return {
-    // AVPlayer plays HLS and progressive MP4 with FairPlay at most: no DASH, no Widevine.
+    // AVPlayer plays HLS (clear or FairPlay) and progressive MP4: no DASH, no Widevine.
     canPlay(stream) {
-      return !stream.drm && !/\.mpd(\?|$)/i.test(stream.url)
+      if (stream.drm) return false
+      return !/\.mpd(\?|$)/i.test(stream.url)
     },
     play(streams, onClosed) {
       this.stop()
-      const stream = streams.find((candidate) => this.canPlay(candidate))
-      if (!stream) {
+      const candidates = streams.filter((candidate) => this.canPlay(candidate))
+      const root = Application.ios.window.rootViewController
+      if (candidates.length === 0 || !root) {
         console.warn('PLAYER no playable stream for AVPlayer')
         onClosed()
         return
       }
-      console.log(`PLAYER playing ${stream.label}`)
-      const url = stream.url
-      const root = Application.ios.window.rootViewController
-      if (!root) return
-      const player = AVPlayer.playerWithURL(NSURL.URLWithString(url))
       const vc = AVPlayerViewController.new()
-      vc.player = player
       controller = vc
       let closed = false
       const close = () => {
@@ -137,18 +157,68 @@ function tvPlayer(): AppPlayer {
         if (current && current.presentingViewController) current.dismissViewControllerAnimatedCompletion(true, () => undefined)
         onClosed()
       }
-      endObserver = NSNotificationCenter.defaultCenter.addObserverForNameObjectQueueUsingBlock(
-        AVPlayerItemDidPlayToEndTimeNotification,
-        player.currentItem,
-        null,
-        () => {
-          console.log('PLAYER ended')
-          close()
+
+      // Loads one candidate into the presented controller; a failed item moves to the next.
+      const attempt = (index: number): void => {
+        try {
+          load(index)
+        } catch (error: unknown) {
+          console.warn(`PLAYER could not start candidate ${index}: ${String(error)}`)
+          if (index + 1 < candidates.length) attempt(index + 1)
+          else close()
         }
-      )
-      root.presentViewControllerAnimatedCompletion(vc, true, () => {
-        console.log(`PLAYER presented ${url}`)
+      }
+
+      const load = (index: number): void => {
+        const stream = candidates[index]
+        if (!stream || controller !== vc) {
+          if (!stream) console.warn('PLAYER every stream failed')
+          close()
+          return
+        }
+        clearStatusPoll()
+        if (endObserver) NSNotificationCenter.defaultCenter.removeObserver(endObserver)
+        endObserver = undefined
+        fairplay?.dispose()
+        fairplay = undefined
+
+        console.log(`PLAYER trying ${stream.label}`)
+        const asset = AVURLAsset.URLAssetWithURLOptions(NSURL.URLWithString(stream.url), null)
+        if (stream.fairplay) {
+          fairplay = createFairPlaySession(stream.fairplay)
+          fairplay.attach(asset)
+        }
+        const item = AVPlayerItem.playerItemWithAsset(asset)
+        const player = AVPlayer.playerWithPlayerItem(item)
+        vc.player = player
+        endObserver = NSNotificationCenter.defaultCenter.addObserverForNameObjectQueueUsingBlock(
+          AVPlayerItemDidPlayToEndTimeNotification,
+          item,
+          null,
+          () => {
+            console.log('PLAYER ended')
+            close()
+          }
+        )
         player.play()
+        // AVPlayerItem reports a bad stream (or an unobtainable key) asynchronously; watch for
+        // it until the item is playing, then stop watching.
+        statusPoll = setInterval(() => {
+          if (controller !== vc) return
+          if (item.status === AVPlayerItemStatus.Failed) {
+            const reason = item.error ? item.error.localizedDescription : 'unknown error'
+            console.warn(`PLAYER ${stream.label} failed: ${reason}`)
+            clearStatusPoll()
+            attempt(index + 1)
+          } else if (item.status === AVPlayerItemStatus.ReadyToPlay) {
+            console.log(`PLAYER playing ${stream.label}`)
+            clearStatusPoll()
+          }
+        }, 300)
+      }
+
+      root.presentViewControllerAnimatedCompletion(vc, true, () => {
+        attempt(0)
         // Menu inside the player dismisses it without telling us: notice the dismissal.
         poll = setInterval(() => {
           if (controller === vc && vc.presentingViewController == null) {
