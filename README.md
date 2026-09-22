@@ -6,9 +6,10 @@ web (Vercel, LG/Samsung-ready) and on **Apple TV**. tvOS has no browser, so ther
 inside NativeScript and draws into a native WebGL view through `@solidtv/nativescript`.
 
 Same experience as the Lightning 3 / Blits reference build: keyboard- or Siri-Remote-driven
-movie browser against The Movie Database with a genre nav, 12 carousel rows that keep
-fetching to the right and cycle once TMDB is exhausted, a details screen with exact
-back-with-state, bounded memory, coalesced input, and visible loading/error states throughout.
+movie browser against The Movie Database with a genre nav, 12 carousel rows of 20 titles
+that loop seamlessly, a details screen with exact back-with-state and real playback (Big Buck
+Bunny, native AVPlayer on Apple TV), bounded memory, coalesced input, and visible
+loading/error states throughout.
 
 ## Web
 
@@ -122,9 +123,14 @@ team; the export to App Store Connect has not been exercised by this build.
 | Key (web) | Siri Remote | Action |
 | --- | --- | --- |
 | Arrow Up / Down | Swipe/click up / down | Move between the genre nav and rows |
-| Arrow Left / Right | Swipe/click left / right | Move within a row or the nav; rows keep fetching more titles to the right and cycle once TMDB is exhausted, left stops at the first item |
-| Enter | Select (click) | Activate genre / open details / retry a failed load |
-| Backspace or Escape | Menu | Back from details (restoring exact genre + position); in the grid, back to the nav |
+| Arrow Left / Right | Swipe/click left / right | Move within a row or the nav; a row's 20 titles cycle seamlessly to the right, left stops at the first item |
+| Enter | Select (click) | Activate genre / open details / retry a failed load / **Play now** starts Big Buck Bunny (on the web, Enter then pauses and resumes) |
+| Backspace or Escape | Menu | Stop playback; back from details (restoring exact genre + position); in the grid, back to the nav |
+
+On Apple TV the player is the system `AVPlayerViewController`: the Siri Remote scrubs and
+pauses as in any tvOS app, and Menu leaves the player back to the details screen. The stream
+is one HLS URL for both targets (`src/state/playback.ts`); browsers without native HLS get
+`hls.js`, loaded on demand.
 
 Focus starts on **All** in the nav. Holding an arrow key scrolls quickly; repeats are
 coalesced (100 ms input throttle) so navigation can never flood the render loop.
@@ -150,8 +156,8 @@ and returns to the tvOS Home screen, as App Review expects.
 
 1. Open the app with the FPS counter on: `http://localhost:5173/?fps=1`
 2. Open Chrome DevTools → **Performance** tab → gear icon → **CPU: 6× slowdown**.
-3. Hold **Arrow Right** for ~10 seconds inside a row, riding through the seam where the items
-   cycle (with the mock's `/__mock/exhaust?page=3` the seam comes after 40 titles).
+3. Hold **Arrow Right** for ~10 seconds inside a row, riding through the seam where the 20
+   items cycle.
 4. Hold **Arrow Down** through all 12 rows, then back up into the nav.
 5. Switch genres a few times and open/close a details page.
 
@@ -165,11 +171,11 @@ at the top of the catalogue, 185 at the last row.
 The simulator's GPU is a software renderer and says nothing about a real Apple TV; the
 SolidTV demo ran at 60 fps on an Apple TV HD. Measure performance on hardware.
 
-## Known limitations (tvOS-mandated deviations)
+## Known limitations
 
-- **No video playback** on either target: tvOS has no `<video>`, and native `AVPlayer`
-  bridging is out of scope. "Play now" shows the brief on-screen hint of the L3 build.
-- **Menu exits from the nav** (see Controls). Everything else is identical to the L3 app.
+- **Menu exits from the nav** (see Controls), as tvOS requires. Everything else is identical
+  to the L3 app, except that this build plays a real stream and loops 20 titles per row
+  (product direction) where L3 showed a hint and fetched ahead.
 - The simulator has no real GPU or texture-memory numbers.
 - The MSDF font atlases (from the L3 build) miss a few glyphs, e.g. the em dash renders as `?`.
 
@@ -192,11 +198,12 @@ src/
   host.ts / host.types   The runtime seam (AppHost): renderer settings, key target, asset URLs, fonts
   App.tsx                HashRouter: Home (kept alive) and Details
   services/tmdb.ts       TMDB access: XHR JSON with timeout+abort, response cache, image sizing
-  services/rows.ts       Row collections (12 per genre), row assembly and fetch-ahead pagination
+  services/rows.ts       Row collections (12 per genre), one 20-title page per row
   pages/Home.tsx         The focus engine: single model {zone, rowIndex, cols[]} + all key input
   pages/Details.tsx      Poster, metadata, mock action buttons, back handling
   components/            Prop-driven view components (no state of their own beyond visuals)
   state/selection.ts     The title handed from Home to Details
+  state/playback.ts      The one stream Play now plays
   debug.ts               Dev-only hooks (__velope: state, node count)
 nativescript/
   app/app.ts             tvOS boot: canvas, KeyBridge, remote, lifecycle -> AppHost -> ../src

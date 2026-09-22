@@ -30,6 +30,6 @@
     }
   },
   "include": ["app/**/*"],
-  "files": ["./references.d.ts"],
+  "files": ["./references.d.ts", "./stubs/hls.d.ts"],
   "exclude": ["node_modules", "platforms"]
 }

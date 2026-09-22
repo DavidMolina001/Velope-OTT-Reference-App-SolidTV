@@ -17,8 +17,9 @@ Four layers, one-way data flow:
 
 1. **Host seam** (`src/host.ts`) — everything a runtime differs in is one object, `AppHost`:
    the renderer settings it requires (canvas, pixel ratios, `Platform`), where the focus
-   manager listens for keys, how an asset path becomes a URL, and how the two MSDF fonts are
-   registered. The web host is derived from `window`; the tvOS boot file
+   manager listens for keys, how an asset path becomes a URL, how the two MSDF fonts are
+   registered, and the video player (a `<video>` element with hls.js on the web, a full-screen
+   `AVPlayerViewController` on Apple TV; one HLS URL for both). The web host is derived from `window`; the tvOS boot file
    (`nativescript/app/app.ts`) builds one from `@solidtv/nativescript`'s `rendererSettings`,
    `KeyBridge` (Siri Remote → key events), `loadSdfFont` and the lifecycle binding, then
    imports `src/index` unchanged. `src/` never imports NativeScript.
@@ -28,9 +29,10 @@ Four layers, one-way data flow:
    (in-flight requests dedupe; failures are evicted so retry refetches), and poster URLs are
    built from `/configuration`, choosing the smallest size that covers the on-screen width —
    tiles fetch `w342`, details `w500`, never full-res. `rows.ts` defines 12 collections
-   (sort/decade variations) applied to any genre, fetches 2–3 discover pages up front, dedupes
-   by id, and fetches further pages on demand as the user scrolls right. Both files are the L3
-   build's, with one runtime-driven change: JSON goes through `XMLHttpRequest` with
+   (sort/decade variations) applied to any genre; each row fetches exactly one discover page
+   (20 titles) and never fetches again — the carousel loops that set (product direction; the
+   L3 fetch-ahead code path is kept but inert, `ROW_PAGES`). Both files are the L3 build's,
+   with one runtime-driven change: JSON goes through `XMLHttpRequest` with
    `responseType = 'json'`, because NativeScript's fetch polyfill hands its Response an
    already-parsed object (NOTES.md).
 
@@ -40,9 +42,8 @@ Four layers, one-way data flow:
    `onBack`) and only mutates this model; every visual (ring, scroll offsets, nav pill) derives
    from it through fine-grained signals, so a key press updates the two tiles whose `focused`
    changed, never the tree. Vertical movement clamps; horizontal movement clamps left at zero
-   and grows to the right — approaching the end fetches the next page, and once TMDB is
-   exhausted the column becomes a virtual index with each slot resolving its movie by
-   `items[slot % count]`. Details has the same shape in miniature (`buttonIndex`).
+   and loops to the right — past the last of the row's 20 titles the column becomes a virtual
+   index with each slot resolving its movie by `items[slot % count]`. Details has the same shape in miniature (`buttonIndex`).
    `Config.throttleInput = 100` coalesces held-key repeats at the framework level, on both
    targets (the tvOS KeyBridge repeats a held button keyboard-style at 80 ms).
 
@@ -99,11 +100,13 @@ SolidTV's `HashRouter` on both targets; on tvOS the host supplies the `window.lo
 history stack and `hashchange` event it reads (`nativescript/app/shims.ts`), so
 `history.back()` behaves like a browser's, including the no-op on the first entry.
 
-## tvOS-mandated deviations (the only differences from the L3 app)
+## Differences from the L3 app
 
-- **No video**: "Play now" shows the L3 build's on-screen hint on both targets; parity matters
-  more than a demo stream.
-- **Menu contract**: a handled Back/Menu calls `preventDefault()` (details → grid, grid →
+- **Playback is real**: "Play now" plays Big Buck Bunny through the runtime's native player
+  (L3 showed a hint). Back/Menu stops it and returns to the details screen.
+- **One page per row, then loop** (product direction, as in the LNG2 build): predictable
+  network cost and a loop the user actually encounters, instead of L3's fetch-ahead.
+- **Menu contract** (tvOS-mandated): a handled Back/Menu calls `preventDefault()` (details → grid, grid →
   nav); in the nav it is left unhandled so the system returns to the Home screen. In a browser
   the unhandled Back is simply a no-op.
 - **Fonts** load through the host (`loadSdfFont` from the app bundle) instead of URLs served by
@@ -116,9 +119,9 @@ history stack and `hashchange` event it reads (`nativescript/app/shims.ts`), so
   discover queries; explicit selection is standard TV UX.
 - **Rows are fixed collections × genre filter** rather than editorially distinct queries —
   uniform, cacheable, and guarantees 12 rows for every genre.
-- **Fetch-ahead, then cycle**: scrolling right fetches the next discover page before the user
-  reaches the end; the seamless infinite cycle only begins once TMDB is exhausted (no new
-  titles or the page-500 cap). Rows with fewer titles than fit on screen simply clamp.
+- **One page, then loop**: a row is its first discover page — 20 titles — and scrolling right
+  past the end cycles those same titles seamlessly. Rows with fewer titles than fit on screen
+  simply clamp.
 - **Reload-based 720p** via `?res=720` on the web; the coordinate system never changes, only
   the canvas. The Apple TV 4K simulator is 1080p; the host derives the logical ratio from the
   screen, so a 720p device scales the same way.

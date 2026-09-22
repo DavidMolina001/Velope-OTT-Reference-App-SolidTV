@@ -7,7 +7,7 @@ import { appFonts } from './fonts'
 import { describeRuntime } from './services/tmdb'
 import { colors, layout } from './theme'
 import App from './App'
-import { installDebug } from './debug'
+import { installDebug, probeImagePipeline } from './debug'
 
 const host = resolveHost()
 console.log(`RUNTIME ${host.platform} ${describeRuntime()}`)
@@ -38,6 +38,7 @@ const renderer = created.renderer as RendererMain
 const render = created.render
 registerDefaultShaders(renderer.stage.shManager)
 installDebug(renderer)
+if (host.platform === 'tvos') void probeImagePipeline()
 host.onRenderer?.(renderer)
 if (host.showFps) setupFPS({ renderer })
 

@@ -7,6 +7,7 @@ const { chainSolidTV } = require('@solidtv/nativescript/webpack')
 // runtime and adds what the bundle needs around it.
 const ROOT = path.resolve(__dirname, '..')
 const PUBLIC = path.join(ROOT, 'public')
+const EMPTY = path.resolve(__dirname, 'stubs/empty.cjs')
 
 // The web build reads VITE_* variables from ../.env through Vite. The tvOS bundle reads the
 // same file here and defines the same `import.meta.env` members, so src/ stays identical.
@@ -35,6 +36,8 @@ module.exports = (env) => {
     // src/ sits outside this folder: resolve its imports from THIS project's node_modules first,
     // never from the web build's, so the bundle carries one copy of each package.
     config.resolve.modules.prepend(path.resolve(__dirname, 'node_modules'))
+    // The web host's HLS fallback needs a DOM <video>; tvOS plays through AVPlayer instead.
+    config.resolve.alias.set('hls.js', EMPTY)
     const mode = env.production ? 'production' : 'development'
     const dotenv = readDotEnv()
     const viteEnv = Object.fromEntries(Object.entries(dotenv).filter(([key]) => key.startsWith('VITE_')))

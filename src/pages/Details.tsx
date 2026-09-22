@@ -4,6 +4,8 @@ import type { KeyHandler } from '@solidtv/solid'
 import ActionButton from '../components/ActionButton'
 import { posterUrl } from '../services/tmdb'
 import { selectedMovie } from '../state/selection'
+import { DEMO_STREAM_URL } from '../state/playback'
+import { resolveHost } from '../host'
 import { colors, layout } from '../theme'
 
 const POSTER_WIDTH = 460
@@ -16,12 +18,14 @@ const hintTransition = { alpha: { duration: 200 } } as const
 // destroyed on exit. The same focus model shape as Home, in miniature (buttonIndex).
 const Details: Component = () => {
   const navigate = useNavigate()
+  const host = resolveHost()
   const movie = selectedMovie()
   const [buttonIndex, setButtonIndex] = createSignal(0)
   const [pressedIndex, setPressedIndex] = createSignal(-1)
   const [posterLoaded, setPosterLoaded] = createSignal(false)
   const [favourited, setFavourited] = createSignal(false)
   const [playHintVisible, setPlayHintVisible] = createSignal(false)
+  const [playing, setPlaying] = createSignal(false)
   const timers = new Set<ReturnType<typeof setTimeout>>()
   const later = (ms: number, fn: () => void) => {
     const timer = setTimeout(() => {
@@ -30,7 +34,10 @@ const Details: Component = () => {
     }, ms)
     timers.add(timer)
   }
-  onCleanup(() => timers.forEach(clearTimeout))
+  onCleanup(() => {
+    timers.forEach(clearTimeout)
+    host.player?.stop()
+  })
   onMount(() => {
     if (!movie) navigate('/', { replace: true })
   })
@@ -55,20 +62,35 @@ const Details: Component = () => {
     return handled(e)
   }
   const onEnter: KeyHandler = (e) => {
+    if (playing()) {
+      host.player?.togglePause()
+      return handled(e)
+    }
     setPressedIndex(buttonIndex())
     later(150, () => setPressedIndex(-1))
     if (buttonIndex() === 0) {
-      // No playback on either target (tvOS has no <video>; parity keeps the web the same):
-      // the brief on-screen hint of the L3 build.
-      setPlayHintVisible(true)
-      later(1800, () => setPlayHintVisible(false))
+      if (host.player) {
+        // The same stream on both targets: AVPlayer on Apple TV (which owns the remote while it
+        // is up), a <video> element over the canvas on the web (Enter pauses, Back stops).
+        setPlaying(true)
+        host.player.play(DEMO_STREAM_URL, () => setPlaying(false))
+      } else {
+        setPlayHintVisible(true)
+        later(1800, () => setPlayHintVisible(false))
+      }
     } else {
       setFavourited((f) => !f)
     }
     return handled(e)
   }
-  // Back/Menu here is handled: it returns to the grid with Home's state intact.
+  // Back/Menu here is handled: it stops playback if any, otherwise returns to the grid with
+  // Home's state intact.
   const onBack: KeyHandler = (e) => {
+    if (playing()) {
+      host.player?.stop()
+      setPlaying(false)
+      return handled(e)
+    }
     navigate(-1)
     return handled(e)
   }
@@ -105,7 +127,7 @@ const Details: Component = () => {
         <ActionButton y={640} width={290} label="Play now" focused={buttonIndex() === 0} pressed={pressedIndex() === 0} />
         <ActionButton y={640} x={330} width={400} label={favouriteLabel()} focused={buttonIndex() === 1} pressed={pressedIndex() === 1} />
         <text y={750} fontSize={24} color={colors.textMuted} alpha={playHintVisible() ? 1 : 0} transition={hintTransition}>
-          Playback is not part of this reference build
+          Playback is not available on this runtime
         </text>
       </view>
       <text x={120} y={990} fontSize={24} color={colors.textMuted}>

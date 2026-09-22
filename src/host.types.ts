@@ -10,6 +10,16 @@ export interface SdfFont {
   metrics?: { ascender: number; descender: number; lineGap: number; unitsPerEm: number }
 }
 
+/** Full-screen playback of one stream, native to each runtime. */
+export interface AppPlayer {
+  /** Starts playing `url` full screen; `onClosed` fires when playback ends, fails or the user leaves it. */
+  play(url: string, onClosed: () => void): void
+  /** Pause/resume (web only; the tvOS player owns the remote while presented). */
+  togglePause(): void
+  /** Tears the player down. Safe to call when nothing plays. */
+  stop(): void
+}
+
 export interface AppHost {
   /** 'web' or 'tvos'; the app deviates only where tvOS mandates it (see PLAN.md). */
   platform: 'web' | 'tvos'
@@ -27,6 +37,8 @@ export interface AppHost {
   loadFonts(stage: Stage, fonts: SdfFont[]): Promise<void>
   /** Called once the renderer exists (the tvOS host binds lifecycle + remote here). */
   onRenderer?(renderer: RendererMain): void
+  /** The runtime's video player, when it has one. */
+  player?: AppPlayer
 }
 
 declare global {

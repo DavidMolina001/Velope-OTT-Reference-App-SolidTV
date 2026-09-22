@@ -5,12 +5,28 @@
 import '@nativescript/canvas-polyfill'
 import '@solidtv/nativescript/shims'
 import './shims'
-import { Application, Color, GridLayout, Screen, knownFolders } from '@nativescript/core'
+import { Application, Color, File, GridLayout, Screen, knownFolders, path } from '@nativescript/core'
 import { isTvOS } from '@nativescript/core/platform'
 import { Canvas } from '@nativescript/canvas'
 import { KeyBridge, bindLifecycle, bindRemote, loadSdfFont, rendererSettings, stubTarget } from '@solidtv/nativescript'
-import type { AppHost } from '../../src/host.types'
+import type { AppHost, AppPlayer } from '../../src/host.types'
 
+// On a device the CLI cannot stream the console: every line also goes to
+// Library/Caches/velope-log.txt in the app's container, for `xcrun devicectl device copy from`
+// (see README). The published host has no mirrorConsole yet, so this is the same idea inline.
+const logFile = File.fromPath(path.join(knownFolders.temp().path, 'velope-log.txt'))
+logFile.writeTextSync('')
+for (const level of ['log', 'warn', 'error'] as const) {
+  const original = console[level].bind(console)
+  console[level] = (...args: unknown[]) => {
+    original(...args)
+    try {
+      logFile.appendTextSync(`${new Date().toISOString().slice(11, 23)} ${level.toUpperCase()} ${args.map(String).join(' ')}\n`)
+    } catch {
+      // logging must never break the app
+    }
+  }
+}
 console.log('BOOT start')
 
 function boot(canvas: Canvas): void {
@@ -21,7 +37,14 @@ function boot(canvas: Canvas): void {
     platform: 'tvos',
     // 1920x1080 logical onto the screen's points and pixels, WebGL2, SDF text, no image
     // workers, the host's Platform for canvas sizing; the app merges its own settings over it.
-    rendererOptions: rendererSettings(canvas, Screen.mainScreen),
+    rendererOptions: {
+      ...rendererSettings(canvas, Screen.mainScreen),
+      // On a real Apple TV the polyfill's fetch of an image never resolves (the simulator hides
+      // this), so the renderer's fetch + createImageBitmap path shows placeholders forever. 'none'
+      // makes it decode through an Image element, which the polyfill backs natively on both.
+      // ('none' is not in the renderer's type; anything but basic/options/full takes that path.)
+      createImageBitmapSupport: 'none' as unknown as 'basic',
+    },
     target: stubTarget,
     keyTarget: bridge,
     // Assets are files in the app bundle (webpack copies public/fonts to fonts/).
@@ -50,6 +73,7 @@ function boot(canvas: Canvas): void {
       }
     },
   }
+  host.player = tvPlayer()
   globalThis.__VELOPE_HOST__ = host
   // The app's own entry, unchanged: it reads the host from the global set above.
   import('../../src/index')
@@ -57,6 +81,76 @@ function boot(canvas: Canvas): void {
     .catch((error: unknown) => {
       console.error('The app entry failed to load', error)
     })
+}
+
+// Full-screen AVPlayerViewController over the app. It owns the Siri Remote while presented
+// (play/pause, scrubbing, Menu to leave); the app learns it is gone by polling the presentation,
+// and tears it down itself when the item plays to its end.
+function tvPlayer(): AppPlayer {
+  let controller: AVPlayerViewController | undefined
+  let poll: ReturnType<typeof setInterval> | undefined
+  let endObserver: unknown
+  const cleanup = () => {
+    if (poll !== undefined) clearInterval(poll)
+    poll = undefined
+    if (endObserver) NSNotificationCenter.defaultCenter.removeObserver(endObserver)
+    endObserver = undefined
+    controller = undefined
+  }
+  return {
+    play(url, onClosed) {
+      this.stop()
+      const root = Application.ios.window.rootViewController
+      if (!root) return
+      const player = AVPlayer.playerWithURL(NSURL.URLWithString(url))
+      const vc = AVPlayerViewController.new()
+      vc.player = player
+      controller = vc
+      let closed = false
+      const close = () => {
+        if (closed) return
+        closed = true
+        const current = controller
+        cleanup()
+        if (current && current.presentingViewController) current.dismissViewControllerAnimatedCompletion(true, () => undefined)
+        onClosed()
+      }
+      endObserver = NSNotificationCenter.defaultCenter.addObserverForNameObjectQueueUsingBlock(
+        AVPlayerItemDidPlayToEndTimeNotification,
+        player.currentItem,
+        null,
+        () => {
+          console.log('PLAYER ended')
+          close()
+        }
+      )
+      root.presentViewControllerAnimatedCompletion(vc, true, () => {
+        console.log(`PLAYER presented ${url}`)
+        player.play()
+        // Menu inside the player dismisses it without telling us: notice the dismissal.
+        poll = setInterval(() => {
+          if (controller === vc && vc.presentingViewController == null) {
+            console.log('PLAYER dismissed')
+            close()
+          }
+        }, 300)
+      })
+    },
+    togglePause() {
+      const player = controller?.player
+      if (!player) return
+      if (player.rate > 0) player.pause()
+      else player.play()
+    },
+    stop() {
+      const current = controller
+      cleanup()
+      if (current) {
+        current.player?.pause()
+        if (current.presentingViewController) current.dismissViewControllerAnimatedCompletion(true, () => undefined)
+      }
+    },
+  }
 }
 
 function createRootView(): GridLayout {
