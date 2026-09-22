@@ -14,6 +14,10 @@
     "preserveSymlinks": true,
     "paths": {
       "@solidjs/router": ["./node_modules/@solidjs/router/dist/index.d.ts"],
+      "@solidtv/solid": ["./node_modules/@solidtv/solid/dist/src/index.d.ts"],
+      "@solidtv/solid/primitives": ["./node_modules/@solidtv/solid/dist/src/primitives/index.d.ts"],
+      "@solidtv/solid/primitives/router": ["./node_modules/@solidtv/solid/dist/src/primitives/routerIndex.d.ts"],
+      "@solidtv/solid/jsx-runtime": ["./node_modules/@solidtv/solid/dist/jsx-runtime.d.ts"],
       "@solidtv/renderer": ["./node_modules/@solidtv/renderer/dist/exports/index.d.ts"],
       "@solidtv/renderer/platform": ["./node_modules/@solidtv/renderer/dist/exports/platform.d.ts"],
       "@solidtv/renderer/utils": ["./node_modules/@solidtv/renderer/dist/exports/utils.d.ts"],
