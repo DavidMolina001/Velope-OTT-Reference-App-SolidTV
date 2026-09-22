@@ -2,6 +2,7 @@
 // import them without pulling Vite's ambient types into the NativeScript typecheck.
 import type { RendererMain, RendererMainSettings, Stage } from '@solidtv/renderer'
 import type { KeyEventTarget } from '@solidtv/solid'
+import type { Stream } from './state/playback'
 
 export interface SdfFont {
   fontFamily: string
@@ -12,8 +13,14 @@ export interface SdfFont {
 
 /** Full-screen playback of one stream, native to each runtime. */
 export interface AppPlayer {
-  /** Starts playing `url` full screen; `onClosed` fires when playback ends, fails or the user leaves it. */
-  play(url: string, onClosed: () => void): void
+  /** Whether this runtime can play the stream's container and DRM (decided before trying). */
+  canPlay(stream: Stream): boolean
+  /**
+   * Plays the first stream of `streams` this runtime can play, full screen, falling back to the
+   * next when a stream fails to start (e.g. no CDM for its DRM). `onClosed` fires when playback
+   * ends, every candidate failed, or the user leaves it.
+   */
+  play(streams: Stream[], onClosed: () => void): void
   /** Pause/resume (web only; the tvOS player owns the remote while presented). */
   togglePause(): void
   /** Tears the player down. Safe to call when nothing plays. */

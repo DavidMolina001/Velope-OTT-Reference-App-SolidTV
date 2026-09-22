@@ -7,8 +7,8 @@ inside NativeScript and draws into a native WebGL view through `@solidtv/natives
 
 Same experience as the Lightning 3 / Blits reference build: keyboard- or Siri-Remote-driven
 movie browser against The Movie Database with a genre nav, 12 carousel rows of 20 titles
-that loop seamlessly, a details screen with exact back-with-state and real playback (Big Buck
-Bunny, native AVPlayer on Apple TV), bounded memory, coalesced input, and visible
+that loop seamlessly, a details screen with exact back-with-state and real playback (DASH + Widevine
+on the web, native AVPlayer on Apple TV), bounded memory, coalesced input, and visible
 loading/error states throughout.
 
 ## Web
@@ -124,13 +124,25 @@ team; the export to App Store Connect has not been exercised by this build.
 | --- | --- | --- |
 | Arrow Up / Down | Swipe/click up / down | Move between the genre nav and rows |
 | Arrow Left / Right | Swipe/click left / right | Move within a row or the nav; a row's 20 titles cycle seamlessly to the right, left stops at the first item |
-| Enter | Select (click) | Activate genre / open details / retry a failed load / **Play now** starts Big Buck Bunny (on the web, Enter then pauses and resumes) |
+| Enter | Select (click) | Activate genre / open details / retry a failed load / **Play now** starts playback (on the web, Enter then pauses and resumes) |
 | Backspace or Escape | Menu | Stop playback; back from details (restoring exact genre + position); in the grid, back to the nav |
 
-On Apple TV the player is the system `AVPlayerViewController`: the Siri Remote scrubs and
-pauses as in any tvOS app, and Menu leaves the player back to the details screen. The stream
-is one HLS URL for both targets (`src/state/playback.ts`); browsers without native HLS get
-`hls.js`, loaded on demand.
+### What plays
+
+`src/state/playback.ts` lists two streams, tried in order:
+
+1. **DASH with Widevine DRM** (castLabs DRMtoday staging demo, `index.mpd` + the
+   `license-proxy-widevine/cenc/?specConform=true` licence URL), through Shaka Player. Plays
+   in browsers with a Widevine CDM: Chrome, Edge, Firefox, the LG/Samsung TV browsers.
+2. **Clear HLS** (Big Buck Bunny, Mux public test stream): the fallback wherever Widevine is
+   unavailable. Safari has no Widevine (FairPlay only), and Apple TV's `AVPlayerViewController`
+   plays HLS/FairPlay only, no DASH and no Widevine, so those get this stream. So does a browser
+   whose licence request fails.
+
+On the web the player asks EME for Widevine before loading, and moves to the next stream when
+a candidate fails to start (the console says which one played). On Apple TV the system player
+owns the Siri Remote: scrub and pause as in any tvOS app, Menu returns to the details screen.
+Both libraries (`shaka-player`, `hls.js`) load on demand and are excluded from the tvOS bundle.
 
 Focus starts on **All** in the nav. Holding an arrow key scrolls quickly; repeats are
 coalesced (100 ms input throttle) so navigation can never flood the render loop.
@@ -173,9 +185,11 @@ SolidTV demo ran at 60 fps on an Apple TV HD. Measure performance on hardware.
 
 ## Known limitations
 
-- **Menu exits from the nav** (see Controls), as tvOS requires. Everything else is identical
-  to the L3 app, except that this build plays a real stream and loops 20 titles per row
-  (product direction) where L3 showed a hint and fetched ahead.
+- **Menu exits from the nav** (see Controls), as tvOS requires.
+- **No Widevine on Apple devices**: the DRM stream plays on the web only; Apple TV and Safari
+  get the clear HLS fallback. FairPlay would need a certificate and licence service of its own.
+- Everything else is identical to the L3 app, except that this build plays a real stream and
+  loops 20 titles per row (product direction) where L3 showed a hint and fetched ahead.
 - The simulator has no real GPU or texture-memory numbers.
 - The MSDF font atlases (from the L3 build) miss a few glyphs, e.g. the em dash renders as `?`.
 
@@ -183,6 +197,8 @@ SolidTV demo ran at 60 fps on an Apple TV HD. Measure performance on hardware.
 
 - `@solidtv/solid` 1.6.3 + `@solidtv/renderer` 1.9.3 — SolidJS bindings over the Lightning 3
   WebGL renderer (`solid-js`, `@solidjs/router` for the hash router it wraps).
+- `shaka-player` (DASH + Widevine via EME) and `hls.js` (HLS where the browser lacks it), both
+  loaded on demand on the web only.
 - `vite` + `vite-plugin-solid` (dev) — the web build; `typescript` (dev) — strict checks.
 - `nativescript/`: `@solidtv/nativescript` 0.1.1 (the tvOS host: renderer settings, Siri
   Remote key bridge, lifecycle), the NativeScript tvOS fork (`nativescript` 9.2.0-tvos.0,
@@ -203,7 +219,7 @@ src/
   pages/Details.tsx      Poster, metadata, mock action buttons, back handling
   components/            Prop-driven view components (no state of their own beyond visuals)
   state/selection.ts     The title handed from Home to Details
-  state/playback.ts      The one stream Play now plays
+  state/playback.ts      The streams Play now tries (DASH+Widevine, then clear HLS)
   debug.ts               Dev-only hooks (__velope: state, node count)
 nativescript/
   app/app.ts             tvOS boot: canvas, KeyBridge, remote, lifecycle -> AppHost -> ../src

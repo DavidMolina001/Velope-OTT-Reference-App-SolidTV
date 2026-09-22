@@ -38,6 +38,7 @@ module.exports = (env) => {
     config.resolve.modules.prepend(path.resolve(__dirname, 'node_modules'))
     // The web host's HLS fallback needs a DOM <video>; tvOS plays through AVPlayer instead.
     config.resolve.alias.set('hls.js', EMPTY)
+    config.resolve.alias.set('shaka-player', EMPTY)
     const mode = env.production ? 'production' : 'development'
     const dotenv = readDotEnv()
     const viteEnv = Object.fromEntries(Object.entries(dotenv).filter(([key]) => key.startsWith('VITE_')))

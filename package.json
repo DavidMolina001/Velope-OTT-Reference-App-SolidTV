@@ -17,6 +17,7 @@
     "@solidtv/renderer": "1.9.3",
     "@solidtv/solid": "1.6.3",
     "hls.js": "^1.7.3",
+    "shaka-player": "^4.16.50",
     "solid-js": "^1.9.9"
   },
   "devDependencies": {
