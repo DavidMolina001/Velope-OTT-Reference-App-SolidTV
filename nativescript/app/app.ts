@@ -33,6 +33,13 @@ function boot(canvas: Canvas): void {
       // Pause the render loop in the background (Apple kills apps that draw there) and
       // release held keys on suspend.
       bindLifecycle(renderer, bridge, Application)
+      // The lifecycle as the log sees it: the suspend, whether the render loop had stopped half
+      // a second later, and the resume.
+      Application.on('suspend', () => {
+        console.log('LIFECYCLE suspend')
+        setTimeout(() => console.log(`LIFECYCLE paused=${String(renderer.isPaused)}`), 500)
+      })
+      Application.on('resume', () => console.log(`LIFECYCLE resume paused=${String(renderer.isPaused)}`))
       if (isTvOS) {
         // Menu (Backspace) the app leaves unhandled passes through to the system and exits.
         bindRemote(bridge, Application.ios.window, {
