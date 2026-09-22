@@ -1,4 +1,5 @@
 import { createEffect, createMemo, For, on, onCleanup, onMount, Show, type Component } from 'solid-js'
+import type { KeyHandler } from '@solidtv/solid'
 import { createStore } from 'solid-js/store'
 import GenreNav, { type NavGenre } from '../components/GenreNav'
 import CarouselRow from '../components/CarouselRow'
@@ -158,13 +159,93 @@ const Home: Component = () => {
   onMount(() => void boot())
   onCleanup(() => inflight.abort())
 
-  // Exposed for the next gates (key handling) and for verification hooks.
-  void stepColumn
-  void activateGenre
+  function openFocusedMovie(): void {
+    const row = state.rows[state.rowIndex]
+    if (!row) return
+    if (row.status === 'error') {
+      void loadRow(state.rowIndex)
+      return
+    }
+    const item = row.items[(state.cols[state.rowIndex] ?? 0) % row.items.length]
+    if (item) console.log(`OPEN ${item.id} ${item.title}`)
+  }
+
+  // All key handling lives here and only mutates the model. A handled press calls
+  // preventDefault() and returns true (consumed: the tvOS host keeps it in the app); the
+  // one press left unhandled is Back in the nav, the root of the app, so the Siri Remote's
+  // Menu returns to the tvOS Home screen there, and nowhere else.
+  const handled = (e: { preventDefault?: () => void }) => {
+    e.preventDefault?.()
+    return true
+  }
+  const onUp: KeyHandler = (e) => {
+    if (state.phase !== 'ready' || state.zone === 'nav') return handled(e)
+    if (state.rowIndex === 0) setState('zone', 'nav')
+    else setState('rowIndex', state.rowIndex - 1)
+    return handled(e)
+  }
+  const onDown: KeyHandler = (e) => {
+    if (state.phase !== 'ready') return handled(e)
+    if (state.zone === 'nav') setState('zone', 'grid')
+    else setState('rowIndex', Math.min(state.rowIndex + 1, state.rows.length - 1))
+    return handled(e)
+  }
+  const onLeft: KeyHandler = (e) => {
+    if (state.phase !== 'ready') return handled(e)
+    if (state.zone === 'nav') setState('navIndex', Math.max(0, state.navIndex - 1))
+    else stepColumn(-1)
+    return handled(e)
+  }
+  const onRight: KeyHandler = (e) => {
+    if (state.phase !== 'ready') return handled(e)
+    if (state.zone === 'nav') setState('navIndex', Math.min(state.navIndex + 1, state.genres.length - 1))
+    else stepColumn(1)
+    return handled(e)
+  }
+  const onEnter: KeyHandler = (e) => {
+    if (state.phase === 'error') {
+      void boot()
+      return handled(e)
+    }
+    if (state.phase !== 'ready') return handled(e)
+    if (state.zone === 'nav') activateGenre()
+    else openFocusedMovie()
+    return handled(e)
+  }
+  const onBack: KeyHandler = (e) => {
+    if (state.phase === 'ready' && state.zone === 'grid') {
+      setState('zone', 'nav')
+      return handled(e)
+    }
+    // Nothing to walk back to: leave the key unhandled so Apple TV's Menu button exits here.
+    return false
+  }
+
   exposeDebug('home', { state, setState })
+  // Dev builds log every focus-model change so the tvOS simulator's console can be checked
+  // the way DevTools is used on the web.
+  if (import.meta.env.DEV) {
+    createEffect(() => {
+      const row = state.rows[state.rowIndex]
+      console.log(
+        `FOCUS zone=${state.zone} nav=${state.navIndex} row=${state.rowIndex} col=${state.cols[state.rowIndex] ?? 0} items=${row?.items.length ?? 0}${row?.exhausted ? ' exhausted' : ''} nodes=${globalThis.__velope?.countNodes() ?? -1}`
+      )
+    })
+  }
 
   return (
-    <view width={layout.width} height={layout.height} color={colors.background}>
+    <view
+      autofocus
+      width={layout.width}
+      height={layout.height}
+      color={colors.background}
+      onUp={onUp}
+      onDown={onDown}
+      onLeft={onLeft}
+      onRight={onRight}
+      onEnter={onEnter}
+      onBack={onBack}
+    >
       <view y={layout.navHeight} width={layout.width} height={layout.height - layout.navHeight} clipping>
         <view y={-state.rowIndex * ROW_STEP} transition={gridTransition}>
           <For each={visibleRows()}>
