@@ -1,0 +1,27 @@
+{
+  "name": "velope-ott-reference-app-solidtv",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Velope OTT Developer Test reference app on SolidTV (SolidJS + Lightning 3 renderer): one codebase for the web and Apple TV",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host --port 4173",
+    "typecheck": "tsc --noEmit",
+    "tvos": "pnpm --dir nativescript tvos",
+    "build:tvos": "pnpm --dir nativescript build:tvos"
+  },
+  "dependencies": {
+    "@solidjs/router": "^0.16.1",
+    "@solidtv/renderer": "1.9.3",
+    "@solidtv/solid": "1.6.3",
+    "solid-js": "^1.9.9"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^7.1.0",
+    "vite-plugin-solid": "^2.11.10"
+  },
+  "packageManager": "pnpm@10.34.5"
+}

@@ -1,0 +1,31 @@
+{
+  "name": "velope-ott-reference-app-solidtv-tvos",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Velope reference app on Apple TV: the NativeScript project around the app in ../src, through @solidtv/nativescript",
+  "main": "app/app.ts",
+  "scripts": {
+    "tvos": "ns run tvos --emulator --no-hmr",
+    "build:tvos": "ns build tvos",
+    "clean": "ns clean"
+  },
+  "dependencies": {
+    "@nativescript/canvas": "3.0.0-alpha.10",
+    "@nativescript/canvas-polyfill": "3.0.0-alpha.10",
+    "@nativescript/core": "9.2.0-tvos.0",
+    "@solidjs/router": "^0.16.1",
+    "@solidtv/nativescript": "0.1.1",
+    "@solidtv/renderer": "1.9.3",
+    "@solidtv/solid": "1.6.3",
+    "solid-js": "^1.9.9"
+  },
+  "devDependencies": {
+    "@nativescript/ios": "9.1.0",
+    "@nativescript/tvos": "9.1.0",
+    "@nativescript/types": "9.1.1",
+    "@nativescript/webpack": "5.0.39-tvos.0",
+    "nativescript": "9.2.0-tvos.0",
+    "typescript": "~6.0.0"
+  },
+  "packageManager": "pnpm@10.34.5"
+}
