@@ -2,6 +2,7 @@ import type { Component, ParentProps } from 'solid-js'
 import { Navigate, Route } from '@solidjs/router'
 import { HashRouter, KeepAliveRoute } from '@solidtv/solid/primitives/router'
 import Home from './pages/Home'
+import Details from './pages/Details'
 import { colors, layout } from './theme'
 
 const Root: Component<ParentProps> = (props) => (
@@ -15,6 +16,7 @@ const Root: Component<ParentProps> = (props) => (
 const App: Component = () => (
   <HashRouter root={Root}>
     <KeepAliveRoute id="home" path="/" component={Home} />
+    <Route path="/details" component={Details} />
     <Route path="/*all" component={() => <Navigate href="/" />} />
   </HashRouter>
 )

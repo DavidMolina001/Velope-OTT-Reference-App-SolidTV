@@ -1,5 +1,7 @@
 import { createEffect, createMemo, For, on, onCleanup, onMount, Show, type Component } from 'solid-js'
-import type { KeyHandler } from '@solidtv/solid'
+import type { ElementNode, KeyHandler } from '@solidtv/solid'
+import { useNavigate } from '@solidjs/router'
+import { setSelectedMovie } from '../state/selection'
 import { createStore } from 'solid-js/store'
 import GenreNav, { type NavGenre } from '../components/GenreNav'
 import CarouselRow from '../components/CarouselRow'
@@ -38,7 +40,10 @@ const gridTransition = { y: { duration: 250, easing } } as const
 let inflight = new AbortController()
 const extending = new Set<string>()
 
-const Home: Component = () => {
+// KeepAliveRoute passes isAlive: false while the details page is up, true again on return.
+const Home: Component<{ isAlive?: () => boolean }> = (props) => {
+  const navigate = useNavigate()
+  let root: ElementNode | undefined
   const [state, setState] = createStore<HomeState>({
     phase: 'loading',
     errorMessage: '',
@@ -156,6 +161,18 @@ const Home: Component = () => {
 
   createEffect(on(() => state.rowIndex, (index) => loadRowsAround(index), { defer: true }))
 
+  // Back from details: the cached page is re-shown, not re-created, so autofocus does not run
+  // again; focus is put back on the root explicitly, after the router has re-attached it.
+  createEffect(
+    on(
+      () => props.isAlive?.() ?? true,
+      (alive) => {
+        if (alive) setTimeout(() => root?.setFocus(), 0)
+      },
+      { defer: true }
+    )
+  )
+
   onMount(() => void boot())
   onCleanup(() => inflight.abort())
 
@@ -167,7 +184,9 @@ const Home: Component = () => {
       return
     }
     const item = row.items[(state.cols[state.rowIndex] ?? 0) % row.items.length]
-    if (item) console.log(`OPEN ${item.id} ${item.title}`)
+    if (!item) return
+    setSelectedMovie({ ...item })
+    navigate('/details')
   }
 
   // All key handling lives here and only mutates the model. A handled press calls
@@ -235,6 +254,7 @@ const Home: Component = () => {
 
   return (
     <view
+      ref={root}
       autofocus
       width={layout.width}
       height={layout.height}
