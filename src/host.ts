@@ -35,6 +35,9 @@ function webPlayer(): AppPlayer {
   }
   return {
     canPlay(stream) {
+      // FairPlay through EME would need its own key-session code and a Safari-only CDM; the
+      // web build plays Widevine or clear content.
+      if (stream.fairplay) return false
       if (!stream.drm) return true
       return hasWidevine && 'com.widevine.alpha' in stream.drm
     },

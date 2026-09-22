@@ -78,6 +78,24 @@ They are worth knowing about in any SolidTV / NativeScript-on-tvOS project (vers
     ordered list of streams and asks EME (`requestMediaKeySystemAccess`) before committing to a
     DRM one, so the fallback is a runtime decision. Found the hard way in the desktop app's
     browser pane, whose Chromium ships without Widevine.
+14. **FairPlay has three traps, all of them silent.** Getting `AVContentKeySession` working
+    through NativeScript cost three builds, each failing without a JS error:
+    - **The Simulator cannot do FairPlay at all.** Creating the session throws
+      `NSInvalidArgumentException: FairPlay Streaming is not supported on this platform`. Only
+      hardware decrypts, so a device is not optional for this feature.
+    - **A null delegate queue is rejected** (`valid delegateQueue is required`), although the
+      documented convention elsewhere in AVFoundation is that null means the main queue. It
+      needs a real `dispatch_queue_create`.
+    - **Native callbacks arrive off the main thread**, where NativeScript's JS does not belong:
+      the key-session delegate runs on that queue, and `NSURLSession` on its own. Every callback
+      hops through `Utils.executeOnMainThread` before touching a promise.
+    The first two only surfaced because the player wraps each candidate in a try/catch that logs
+    the ObjC exception and moves to the next stream; without it the screen just sat there.
+15. **The Siri Remote cannot be scripted on a device.** The XCUITest driver that works on the
+    simulator will not install alongside the app on a personal team (the runner is a second app
+    and code-signing verification refuses it). The tvOS host therefore honours a `VELOPE_PLAY`
+    environment variable that starts playback right after boot, so a device build can be
+    verified from the app's own mirrored log with no UI driving at all.
 
 ## What would be improved with more time
 
