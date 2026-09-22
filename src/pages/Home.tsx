@@ -267,7 +267,8 @@ const Home: Component<{ isAlive?: () => boolean }> = (props) => {
       onBack={onBack}
     >
       <view y={layout.navHeight} width={layout.width} height={layout.height - layout.navHeight} clipping>
-        <view y={-state.rowIndex * ROW_STEP} transition={gridTransition}>
+        {/* Zero size on purpose: a translated container must not carry its parent's bounds (see CarouselRow) */}
+        <view width={0} height={0} y={-state.rowIndex * ROW_STEP} transition={gridTransition}>
           <For each={visibleRows()}>
             {(row) => (
               <CarouselRow

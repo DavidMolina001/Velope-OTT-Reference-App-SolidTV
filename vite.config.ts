@@ -10,7 +10,9 @@ export default defineConfig(({ mode }) => ({
     __enableInspector__: mode !== 'production',
     __emitBoundsEvents__: false,
     __enableCompressedTextures__: false,
-    __renderTextBatching__: true,
+    // Text batching draws every text node after the quads of the frame, so text under an
+    // opaque overlay (splash, error screen) showed through it. Off keeps tree order.
+    __renderTextBatching__: false,
   },
   plugins: [
     solidPlugin({

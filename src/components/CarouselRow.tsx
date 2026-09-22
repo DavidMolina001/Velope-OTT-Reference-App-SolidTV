@@ -61,21 +61,26 @@ const CarouselRow: Component<Props> = (props) => {
     currentX = targetX
   })
 
+  // The scroller and the wrapper are pure translations with an explicit ZERO size. A <view>
+  // without a size inherits its parent's, and a 1830-wide node at x = -2400 is entirely
+  // off-screen: the renderer then marks it OutOfBounds and defers updating its children, so a
+  // scrolled row (or a scrolled grid) goes blank. A zero-size node takes its parent's render
+  // state instead, which is how Blits' size-less elements behave.
   return (
     <view y={props.y} width={layout.width} height={440}>
       <text x={90} fontFamily="raleway" fontSize={34} color={colors.textRow}>
         {props.row.title}
       </text>
-      <view x={90} y={64}>
+      <view x={90} y={64} width={0} height={0}>
         <Show when={props.row.status === 'ready'}>
-          <view ref={scroller} transition={scrollTransition}>
+          <view ref={scroller} width={0} height={0} transition={scrollTransition}>
             <For each={window().items}>
               {(item) => <MovieTile item={item} x={item.index * TILE_STEP} focused={props.rowFocused && item.index === props.focusedCol} />}
             </For>
           </view>
         </Show>
         <Show when={props.row.status === 'pending' || props.row.status === 'loading'}>
-          <view>
+          <view width={0} height={0}>
             <view
               x={-6}
               y={-6}
@@ -92,7 +97,7 @@ const CarouselRow: Component<Props> = (props) => {
           </view>
         </Show>
         <Show when={props.row.status === 'error'}>
-          <view y={120}>
+          <view y={120} width={0} height={0}>
             <text fontSize={32} color={colors.textPrimary}>
               This row failed to load.
             </text>
