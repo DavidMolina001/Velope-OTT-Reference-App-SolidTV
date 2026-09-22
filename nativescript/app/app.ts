@@ -29,6 +29,12 @@ for (const level of ['log', 'warn', 'error'] as const) {
 }
 console.log('BOOT start')
 
+function bundleImageDataUrl(fileUrl: string): string {
+  const filePath = fileUrl.replace(/^file:\/\//, '')
+  const data = File.fromPath(filePath).readSync() as NSData
+  return 'data:image/png;base64,' + data.base64EncodedStringWithOptions(0 as NSDataBase64EncodingOptions)
+}
+
 function boot(canvas: Canvas): void {
   // The Siri Remote goes into the bridge; the app's focus manager listens on the bridge.
   const bridge = new KeyBridge()
@@ -51,7 +57,11 @@ function boot(canvas: Canvas): void {
     assetUrl: (path) => 'file://' + appPath + '/' + path,
     // The polyfill mis-decodes json XHR responses from file URLs; loadSdfFont routes the atlas
     // data through a blob. Text nodes must not exist before this resolves.
-    loadFonts: (stage, fonts) => Promise.all(fonts.map((font) => loadSdfFont(stage, font))).then(() => undefined),
+    // With the renderer decoding through Image elements (see rendererOptions), a file:// atlas
+    // does not load (Image only takes http(s) and data: URLs on the polyfill), so the atlas PNG
+    // is read from the bundle and handed over as a base64 data URL.
+    loadFonts: (stage, fonts) =>
+      Promise.all(fonts.map((font) => loadSdfFont(stage, { ...font, atlasUrl: bundleImageDataUrl(font.atlasUrl) }))).then(() => undefined),
     onRenderer: (renderer) => {
       // Pause the render loop in the background (Apple kills apps that draw there) and
       // release held keys on suspend.
