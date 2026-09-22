@@ -39,8 +39,9 @@ screen with a message telling you exactly this.
 ### Deploying to Vercel
 
 Import the repository in the Vercel dashboard; `vercel.json` sets the Vite build
-(`pnpm build`, output `dist`). Add the environment variable `VITE_TMDB_API_KEY` in the
-project settings. Every push to `main` redeploys.
+(`pnpm build`, output `dist`). Add the environment variable `VITE_TMDB_API_KEY` (or plain
+`TMDB_API_KEY`, which Vercel prefers since the value is public in the bundle anyway) in the
+project settings, then redeploy once. Every push to `main` redeploys.
 
 ## Apple TV (simulator)
 
