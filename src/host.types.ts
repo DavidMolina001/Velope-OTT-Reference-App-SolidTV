@@ -13,6 +13,8 @@ export interface SdfFont {
 export interface AppHost {
   /** 'web' or 'tvos'; the app deviates only where tvOS mandates it (see PLAN.md). */
   platform: 'web' | 'tvos'
+  /** Show the FPS counter (web: ?fps=1, as in the L3 build). */
+  showFps?: boolean
   /** Renderer settings the host requires (canvas, pixel ratios, platform). Merged under the app's own. */
   rendererOptions: Partial<RendererMainSettings>
   /** Where the renderer would append its canvas; the tvOS host passes a stub. */
