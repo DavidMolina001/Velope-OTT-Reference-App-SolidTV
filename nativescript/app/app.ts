@@ -108,8 +108,20 @@ function tvPlayer(): AppPlayer {
     controller = undefined
   }
   return {
-    play(url, onClosed) {
+    // AVPlayer plays HLS and progressive MP4 with FairPlay at most: no DASH, no Widevine.
+    canPlay(stream) {
+      return !stream.drm && !/\.mpd(\?|$)/i.test(stream.url)
+    },
+    play(streams, onClosed) {
       this.stop()
+      const stream = streams.find((candidate) => this.canPlay(candidate))
+      if (!stream) {
+        console.warn('PLAYER no playable stream for AVPlayer')
+        onClosed()
+        return
+      }
+      console.log(`PLAYER playing ${stream.label}`)
+      const url = stream.url
       const root = Application.ios.window.rootViewController
       if (!root) return
       const player = AVPlayer.playerWithURL(NSURL.URLWithString(url))

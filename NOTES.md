@@ -72,6 +72,12 @@ They are worth knowing about in any SolidTV / NativeScript-on-tvOS project (vers
     polls `presentingViewController` to learn it is gone. Both play the same HLS URL; the
     Google-hosted Big Buck Bunny MP4 everyone links to returns 403 now, Mux's public test
     stream is the one that still serves (and with CORS).
+13. **Widevine stops at Apple's door.** The DRM demo stream (DASH, Widevine + PlayReady) plays
+    through Shaka Player wherever a Widevine CDM exists; Safari and tvOS have none, and AVPlayer
+    does not read DASH at all. Rather than special-case platforms, `AppPlayer.play` takes an
+    ordered list of streams and asks EME (`requestMediaKeySystemAccess`) before committing to a
+    DRM one, so the fallback is a runtime decision. Found the hard way in the desktop app's
+    browser pane, whose Chromium ships without Widevine.
 
 ## What would be improved with more time
 

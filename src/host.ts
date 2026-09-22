@@ -8,17 +8,24 @@
 // `AppHost`; src/ never imports anything from NativeScript.
 import { loadFonts } from '@solidtv/solid'
 import type { AppHost, AppPlayer } from './host.types'
+import { isDash, isHls, type Stream } from './state/playback'
 
 export type { AppHost, AppPlayer, SdfFont } from './host.types'
 
-// A <video> element over the canvas. HLS plays natively where the browser supports it (Safari,
-// the TV browsers) and through hls.js elsewhere (Chrome, Firefox), loaded on demand.
+// A <video> element over the canvas. DASH (with Widevine/PlayReady DRM through EME) plays
+// through Shaka Player; HLS plays natively where the browser supports it (Safari, the TV
+// browsers) and through hls.js elsewhere (Chrome, Firefox). Both libraries load on demand.
 function webPlayer(): AppPlayer {
   let video: HTMLVideoElement | undefined
   let hls: { destroy(): void } | undefined
+  let shaka: { destroy(): Promise<void> } | undefined
+  // Widevine is what the demo stream's DRM needs; Safari (FairPlay only) has no such CDM.
+  const hasWidevine = typeof navigator !== 'undefined' && 'requestMediaKeySystemAccess' in navigator && !/^((?!chrome|android).)*safari/i.test(navigator.userAgent)
   const stop = () => {
     hls?.destroy()
     hls = undefined
+    void shaka?.destroy()
+    shaka = undefined
     if (video) {
       video.pause()
       video.removeAttribute('src')
@@ -27,7 +34,11 @@ function webPlayer(): AppPlayer {
     }
   }
   return {
-    play(url, onClosed) {
+    canPlay(stream) {
+      if (!stream.drm) return true
+      return hasWidevine && 'com.widevine.alpha' in stream.drm
+    },
+    play(streams, onClosed) {
       stop()
       const element = document.createElement('video')
       element.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;background:#000;object-fit:contain;z-index:10'
@@ -41,36 +52,86 @@ function webPlayer(): AppPlayer {
         onClosed()
       }
       element.addEventListener('ended', close)
-      element.addEventListener('error', () => {
-        console.warn('PLAYER error', element.error?.code, element.error?.message)
-        close()
-      })
       video = element
       document.body.appendChild(element)
-      const isHls = /\.m3u8(\?|$)/.test(url)
-      if (isHls && !element.canPlayType('application/vnd.apple.mpegurl')) {
-        void import('hls.js').then(({ default: Hls }) => {
-          if (video !== element) return
-          if (!Hls.isSupported()) {
-            console.warn('PLAYER HLS not supported in this browser')
-            close()
-            return
+      const candidates = streams.filter((stream) => this.canPlay(stream))
+      // Try the candidates in order; a failure to start moves on to the next, a failure of the
+      // last one closes the player.
+      const attempt = async (index: number): Promise<void> => {
+        const stream = candidates[index]
+        if (!stream || video !== element) {
+          if (!stream) console.warn('PLAYER no playable stream')
+          close()
+          return
+        }
+        const next = () => void attempt(index + 1)
+        let started = false
+        const onError = () => {
+          console.warn('PLAYER element error', element.error?.code, element.error?.message)
+          if (started) close()
+          else next()
+        }
+        element.addEventListener('error', onError, { once: true })
+        try {
+          if (stream.drm) {
+            // Ask EME up front, so a browser without the CDM (or the pane of a desktop app) does
+            // not spend a manifest load on it.
+            await navigator.requestMediaKeySystemAccess('com.widevine.alpha', [
+              { initDataTypes: ['cenc'], videoCapabilities: [{ contentType: 'video/mp4; codecs="avc1.42E01E"' }], audioCapabilities: [{ contentType: 'audio/mp4; codecs="mp4a.40.2"' }] },
+            ])
           }
-          const instance = new Hls()
-          hls = instance
-          instance.on(Hls.Events.ERROR, (_event: unknown, data: { fatal?: boolean; details?: string }) => {
-            if (data.fatal) {
-              console.warn('PLAYER hls.js fatal', data.details)
+          if (isDash(stream.url)) {
+            const { default: shakaLib } = await import('shaka-player')
+            if (video !== element) return
+            shakaLib.polyfill.installAll()
+            const player = new shakaLib.Player()
+            shaka = player
+            player.addEventListener('error', (event: Event) => {
+              const detail = (event as unknown as { detail?: { code?: number; message?: string } }).detail
+              console.warn('PLAYER shaka error', detail?.code, detail?.message)
               close()
-            }
-          })
-          instance.loadSource(url)
-          instance.attachMedia(element)
-        })
-      } else {
-        element.src = url
+            })
+            await player.attach(element)
+            if (stream.drm) player.configure({ drm: { servers: stream.drm } })
+            await player.load(stream.url)
+          } else if (isHls(stream.url) && !element.canPlayType('application/vnd.apple.mpegurl')) {
+            const { default: Hls } = await import('hls.js')
+            if (video !== element) return
+            if (!Hls.isSupported()) throw new Error('hls.js not supported here')
+            const instance = new Hls()
+            hls = instance
+            await new Promise<void>((resolve, reject) => {
+              instance.on(Hls.Events.ERROR, (_event: unknown, data: { fatal?: boolean; details?: string }) => {
+                if (data.fatal) {
+                  const error = new Error(`hls.js fatal ${data.details}`)
+                  if (started) {
+                    console.warn('PLAYER', error.message)
+                    close()
+                  } else reject(error)
+                }
+              })
+              instance.on(Hls.Events.MANIFEST_PARSED, () => resolve())
+              instance.loadSource(stream.url)
+              instance.attachMedia(element)
+            })
+          } else {
+            element.src = stream.url
+          }
+          started = true
+          console.log(`PLAYER playing ${stream.label}`)
+          void element.play().catch(() => undefined)
+        } catch (error) {
+          const detail = error as { code?: number; message?: string }
+          console.warn(`PLAYER ${stream.label} failed to start: ${detail?.code ?? ''} ${detail?.message ?? String(error)}`)
+          element.removeEventListener('error', onError)
+          void shaka?.destroy()
+          shaka = undefined
+          hls?.destroy()
+          hls = undefined
+          next()
+        }
       }
-      void element.play().catch(() => undefined)
+      void attempt(0)
     },
     togglePause() {
       if (!video) return
