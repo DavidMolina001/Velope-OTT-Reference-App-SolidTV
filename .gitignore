@@ -10,3 +10,5 @@ dist/
 nativescript/node_modules/
 nativescript/platforms/
 nativescript/hooks/
+.vercel
+.env*
