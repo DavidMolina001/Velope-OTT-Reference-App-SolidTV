@@ -21,6 +21,7 @@ export function webHost(): AppHost {
       : Math.min(window.innerWidth / 1920, window.innerHeight / 1080)
   return {
     platform: 'web',
+    showFps: params.has('fps'),
     rendererOptions: {
       deviceLogicalPixelRatio: ratio,
       devicePhysicalPixelRatio: 1,

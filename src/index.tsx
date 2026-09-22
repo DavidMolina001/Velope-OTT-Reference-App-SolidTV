@@ -1,5 +1,5 @@
 import { Config, createRenderer, registerDefaultShaders } from '@solidtv/solid'
-import { useFocusManager } from '@solidtv/solid/primitives'
+import { FPSCounter, setupFPS, useFocusManager } from '@solidtv/solid/primitives'
 import { SdfTextRenderer, WebGlCoreRenderer } from '@solidtv/renderer/webgl'
 import type { RendererMain } from '@solidtv/renderer'
 import { resolveHost } from './host'
@@ -22,6 +22,8 @@ Config.rendererOptions = {
   appHeight: layout.height,
   clearColor: colors.background,
   numImageWorkers: 0,
+  // Frame telemetry only when the counter is shown (?fps=1 on the web)
+  fpsUpdateInterval: host.showFps ? 300 : 0,
   fontEngines: [SdfTextRenderer],
   renderEngine: WebGlCoreRenderer,
   // Hard ceiling for texture memory (L3: gpuMemory.max 160 MB, target 0.8); the renderer
@@ -37,6 +39,7 @@ const render = created.render
 registerDefaultShaders(renderer.stage.shManager)
 installDebug(renderer)
 host.onRenderer?.(renderer)
+if (host.showFps) setupFPS({ renderer })
 
 host.loadFonts(renderer.stage, appFonts(host)).then(() => {
   render(() => {
@@ -51,7 +54,12 @@ host.loadFonts(renderer.stage, appFonts(host)).then(() => {
       },
       host.keyTarget
     )
-    return <App />
+    return (
+      <>
+        <App />
+        {host.showFps && <FPSCounter mountX={1} x={1910} y={10} />}
+      </>
+    )
   })
   console.log(`APP rendered on ${host.platform}`)
 })
