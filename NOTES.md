@@ -91,7 +91,14 @@ They are worth knowing about in any SolidTV / NativeScript-on-tvOS project (vers
       hops through `Utils.executeOnMainThread` before touching a promise.
     The first two only surfaced because the player wraps each candidate in a try/catch that logs
     the ObjC exception and moves to the next stream; without it the screen just sat there.
-15. **The Siri Remote cannot be scripted on a device.** The XCUITest driver that works on the
+15. **Protected video refuses to be mirrored.** With Device Hub mirroring the Apple TV, the
+    FairPlay stream is a black frame with a spinner in the window while the television plays it
+    perfectly; closing Device Hub "fixes" it. Nothing is wrong: output protection keeps
+    decrypted frames out of any screen-capture path, and the app's log shows the licence
+    exchange and a clip that ran to `PLAYER ended` throughout. The clear stream mirrors
+    normally, which is the quickest way to tell this apart from a real playback failure. It
+    also means a screenshot can never be the evidence that DRM playback works — the log is.
+16. **The Siri Remote cannot be scripted on a device.** The XCUITest driver that works on the
     simulator will not install alongside the app on a personal team (the runner is a second app
     and code-signing verification refuses it). The tvOS host therefore honours a `VELOPE_PLAY`
     environment variable that starts playback right after boot, so a device build can be

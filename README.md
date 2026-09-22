@@ -164,6 +164,12 @@ FairPlay needs the device's secure key path, which **the tvOS Simulator does not
 answers "FairPlay Streaming is not supported on this platform"), so the simulator always shows
 the clear fallback. Verify FairPlay on real hardware.
 
+**Protected video does not mirror.** With Xcode's Device Hub (or any screen capture) watching
+the Apple TV, the FairPlay stream shows a black frame and a spinner in the mirrored window
+while playing normally on the television itself: output protection keeps decrypted frames out
+of the capture path. That is the DRM working, not a failure. Watch the TV, and read the app's
+log for the licence exchange; the clear stream mirrors fine, which is the giveaway.
+
 On Apple TV the system player owns the Siri Remote: scrub and pause as in any tvOS app, Menu
 returns to the details screen. Both web libraries (`shaka-player`, `hls.js`) load on demand and
 are excluded from the tvOS bundle.
