@@ -1,6 +1,8 @@
-// Row collections and row assembly. Ported 1:1 from the L3 reference build: 12 fixed
-// collections (sort/decade variations) applied to any genre, 2–3 discover pages up front,
-// dedupe by id, and further pages appended on demand (extendRowItems) as the user scrolls.
+// Row collections and row assembly. 12 fixed collections (sort/decade variations) applied to
+// any genre. Each row is exactly ONE discover page (20 titles) and never fetches again: the
+// carousel loops that set (the product direction David gave on 2026-09-22, as in the LNG2
+// build). The L3 fetch-ahead machinery (extendRowItems, nextPage, exhausted) is kept but a row
+// is born exhausted, so it is inert unless ROW_PAGES is raised again.
 import { discoverMovies, type Movie } from './tmdb'
 
 export interface RowItem extends Movie {
@@ -52,6 +54,8 @@ const COLLECTIONS: RowCollection[] = [
   },
 ]
 
+// Discover pages fetched per row. 1 = 20 titles, then the row cycles.
+export const ROW_PAGES = 1
 const MIN_ITEMS_PER_ROW = 30
 // The discover endpoint rejects pages beyond 500
 export const MAX_DISCOVER_PAGE = 500
@@ -63,8 +67,8 @@ export function buildRows(genreId: number | null): Row[] {
     title: collection.title,
     status: 'pending' as RowStatus,
     items: [] as RowItem[],
-    nextPage: 3,
-    exhausted: false,
+    nextPage: ROW_PAGES + 1,
+    exhausted: true,
   }))
 }
 
@@ -88,13 +92,14 @@ export async function fetchRowItems(
   const params = rowParams(genreId, rowIndex)
 
   const byId = new Map<number, Movie>()
-  const firstPages = await Promise.all([1, 2].map((page) => discoverMovies(params, page, signal)))
+  const pages = Array.from({ length: ROW_PAGES }, (_, i) => i + 1)
+  const firstPages = await Promise.all(pages.map((page) => discoverMovies(params, page, signal)))
   for (const movie of firstPages.flat()) byId.set(movie.id, movie)
 
-  let nextPage = 3
-  if (byId.size < MIN_ITEMS_PER_ROW) {
-    for (const movie of await discoverMovies(params, 3, signal)) byId.set(movie.id, movie)
-    nextPage = 4
+  let nextPage = ROW_PAGES + 1
+  if (ROW_PAGES > 1 && byId.size < MIN_ITEMS_PER_ROW) {
+    for (const movie of await discoverMovies(params, nextPage, signal)) byId.set(movie.id, movie)
+    nextPage += 1
   }
 
   const unique = [...byId.values()]

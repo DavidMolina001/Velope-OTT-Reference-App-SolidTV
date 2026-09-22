@@ -100,6 +100,7 @@ const Home: Component<{ isAlive?: () => boolean }> = (props) => {
     patchRow(index, rowId, { status: 'loading' })
     try {
       const { items, nextPage } = await fetchRowItems(activeGenreId(), index, inflight.signal)
+      // One page per row, then the row cycles (exhausted from birth; see rows.ts)
       patchRow(index, rowId, { status: 'ready', items, nextPage })
     } catch (error) {
       patchRow(index, rowId, { status: isAbortError(error) ? 'pending' : 'error' })

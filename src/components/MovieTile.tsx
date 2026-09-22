@@ -41,7 +41,10 @@ const MovieTile: Component<Props> = (props) => {
           borderRadius={12}
           color={0xffffffff}
           src={posterSrc()}
-          onEvent={{ loaded: () => setPosterLoaded(true) }}
+          onEvent={{
+            loaded: () => setPosterLoaded(true),
+            failed: (_node: unknown, info: unknown) => import.meta.env.DEV && console.warn(`POSTER failed ${posterSrc()} ${JSON.stringify(info)}`),
+          }}
         />
         <view
           width={layout.tileWidth}

@@ -10,13 +10,12 @@ left/right either move the nav focus (clamped) or step the current row's column.
 screen — ring, row scroll, nav pill — is a signal derived from the model, so a key press
 re-renders only the tiles whose `focused` prop actually changed, never the tree; the same code
 runs on the web and on Apple TV, where the Siri Remote arrives through a key bridge as the same
-`ArrowLeft`/`Enter`/`Backspace` events. At the edges: left clamps at the first item; approaching
-the right end triggers a fetch of the next discover page, so the row keeps growing ahead of the
-user. Only when TMDB is exhausted does the column become a virtual index past the array, with
-every rendered slot resolving its movie via `items[slot % count]` — a seamless cycle. No index
+`ArrowLeft`/`Enter`/`Backspace` events. At the edges: left clamps at the first item; past the
+right end the column becomes a virtual index past the array, with every rendered slot resolving
+its movie via `items[slot % count]` — a seamless cycle of the row's 20 titles. No index
 can run past the array — the modulo is the lookup, not a special case; rows shorter than the
-viewport simply clamp. Verified with real presses on the simulator: a 3-title row stops at
-column 2, an exhausted 40-title row keeps going to column 48 and beyond.
+viewport simply clamp. Verified with real presses on the simulator and on an Apple TV 4K: a 3-title row stops at
+column 2, a 20-title row keeps going past column 20 and beyond.
 
 **Q2 — A user scrolls fast through 300+ items on a 3-year-old streaming stick with limited
 RAM. What happens in your app, and what did you do to keep it stable?**

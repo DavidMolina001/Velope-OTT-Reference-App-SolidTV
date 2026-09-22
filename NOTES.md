@@ -58,14 +58,27 @@ They are worth knowing about in any SolidTV / NativeScript-on-tvOS project (vers
     vs 458 on Home). That is the intended zero-cost back-with-state, the L3 `keepAlive`
     equivalent; Home re-focuses its root when `isAlive` flips back to true because `autofocus`
     only fires on creation.
+11. **On a real Apple TV, `fetch` of an image never resolves** (the simulator hides it: there it
+    works). The renderer's default decode path there is fetch → blob → createImageBitmap, so
+    every poster stayed a placeholder on the device while the TMDB JSON (XHR) loaded fine. The
+    `Image` element path works on both, so the tvOS host sets `createImageBitmapSupport` to a
+    value outside basic/options/full, which the renderer treats as "no createImageBitmap".
+    Found with a dev-only probe that logs both decode paths with timeouts (`probeImagePipeline`).
+12. **Playback on tvOS is a presented `AVPlayerViewController`**, driven from the host through
+    the same `AppPlayer` seam the web implements with a `<video>` element. The system player
+    owns the Siri Remote while presented and Menu dismisses it without a callback, so the host
+    polls `presentingViewController` to learn it is gone. Both play the same HLS URL; the
+    Google-hosted Big Buck Bunny MP4 everyone links to returns 403 now, Mux's public test
+    stream is the one that still serves (and with CORS).
 
 ## What would be improved with more time
 
 - **Real-device pass** on an Apple TV (a free personal team is enough): the simulator's
   software GPU says nothing about frame rate or texture memory; the SolidTV demo's 60 fps on
   an Apple TV HD is the only hardware number available.
-- **Native playback**: an `AVPlayer` view behind the "Play now" button on tvOS, with the web
-  keeping a `<video>` element — the host seam already has the shape for it.
+- **A bundled fallback clip** for playback when the public stream is down (a CC-BY Big Buck
+  Bunny excerpt in `public/assets`), and a proper resume of the details focus after the
+  system player closes on hardware.
 - **Automated runs of the verification scripts**: `remote-sim.sh` sequences and the web key
   floods as a test job, asserting on the `FOCUS` lines and `__velope.countNodes()`.
 - **Regenerated MSDF atlases** with a full Latin charset (the em dash).
