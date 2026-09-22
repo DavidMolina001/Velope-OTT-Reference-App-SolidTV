@@ -38,6 +38,9 @@ module.exports = (env) => {
     const mode = env.production ? 'production' : 'development'
     const dotenv = readDotEnv()
     const viteEnv = Object.fromEntries(Object.entries(dotenv).filter(([key]) => key.startsWith('VITE_')))
+    // Same aliases as vite.config.ts: the un-prefixed names work too.
+    if (!viteEnv.VITE_TMDB_API_KEY && dotenv.TMDB_API_KEY) viteEnv.VITE_TMDB_API_KEY = dotenv.TMDB_API_KEY
+    if (!viteEnv.VITE_TMDB_BASE_URL && dotenv.TMDB_BASE_URL) viteEnv.VITE_TMDB_BASE_URL = dotenv.TMDB_BASE_URL
     config.plugin('VelopeDefine').use(require('webpack').DefinePlugin, [
       {
         // Vite's import.meta.env, for the members src/ reads. BASE_URL is unused on tvOS
