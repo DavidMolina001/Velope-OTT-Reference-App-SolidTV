@@ -13,12 +13,15 @@ const PUBLIC = path.join(ROOT, 'public')
 // The key is injected at build time and never lives in src/ or in git.
 function readDotEnv() {
   const env = {}
-  const file = path.join(ROOT, '.env')
-  if (!fs.existsSync(file)) return env
-  for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
-    if (line.trim().startsWith('#')) continue
-    const match = /^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/i.exec(line)
-    if (match) env[match[1]] = match[2].replace(/^["']|["']$/g, '')
+  // Same precedence as Vite: .env, then .env.local overrides (both gitignored except .env.example).
+  for (const name of ['.env', '.env.local']) {
+    const file = path.join(ROOT, name)
+    if (!fs.existsSync(file)) continue
+    for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+      if (line.trim().startsWith('#')) continue
+      const match = /^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/i.exec(line)
+      if (match) env[match[1]] = match[2].replace(/^["']|["']$/g, '')
+    }
   }
   return env
 }
@@ -44,7 +47,9 @@ module.exports = (env) => {
         __enableInspector__: false,
         __emitBoundsEvents__: false,
         __enableCompressedTextures__: false,
-        __renderTextBatching__: true,
+        // Text batching draws every text node after the quads of the frame, so text under an
+    // opaque overlay (splash, error screen) showed through it. Off keeps tree order.
+    __renderTextBatching__: false,
       },
     ])
     // No type check of the bundle: the web build does none either (vite only transpiles),

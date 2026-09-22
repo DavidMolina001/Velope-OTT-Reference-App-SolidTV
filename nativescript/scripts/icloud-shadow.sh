@@ -17,7 +17,7 @@ B="$HOME/Library/Caches/velope-solidtv"
 P="$B/project"
 mkdir -p "$P"
 # The shared app and its assets, one level up, as the real layout has them.
-for item in src public .env .env.example; do
+for item in src public .env .env.local .env.example; do
   [ -e "$ROOT/$item" ] || continue
   rm -f "$B/$item"; ln -s "$ROOT/$item" "$B/$item"
 done
