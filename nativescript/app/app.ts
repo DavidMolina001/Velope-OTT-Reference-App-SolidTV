@@ -1,13 +1,15 @@
 // The tvOS host around the shared app in ../../src. Boot order matters at the top: the
 // polyfill first, because the renderer and the router read browser globals at import; then
-// the shim that gives `window.history` the shape the router reads.
+// the host package's shim (an inert window.history), then this project's ./shims, which
+// replaces it with a location + history + hashchange the HashRouter can actually drive.
 import '@nativescript/canvas-polyfill'
 import '@solidtv/nativescript/shims'
+import './shims'
 import { Application, Color, GridLayout, Screen, knownFolders } from '@nativescript/core'
 import { isTvOS } from '@nativescript/core/platform'
 import { Canvas } from '@nativescript/canvas'
 import { KeyBridge, bindLifecycle, bindRemote, loadSdfFont, rendererSettings, stubTarget } from '@solidtv/nativescript'
-import type { AppHost } from '../../src/host'
+import type { AppHost } from '../../src/host.types'
 
 console.log('BOOT start')
 
