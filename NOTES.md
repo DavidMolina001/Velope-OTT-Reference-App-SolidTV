@@ -1,6 +1,10 @@
 # NOTES
 
-Pitfalls hit while building, recorded as they happened (finalised at the docs gate).
+## Where the framework, its guide and the first attempt were wrong
+
+Each of these was caught by running the app on the simulator and the web, not by reading code.
+They are worth knowing about in any SolidTV / NativeScript-on-tvOS project (versions as of
+2026-09-22).
 
 1. **The published SolidTV Apple TV stack is behind its own deployment guide.** The guide and
    the demo app's `nativescript/` project use `bindCanvas`, `mirrorConsole`, full browser shims,
@@ -54,3 +58,20 @@ Pitfalls hit while building, recorded as they happened (finalised at the docs ga
     vs 458 on Home). That is the intended zero-cost back-with-state, the L3 `keepAlive`
     equivalent; Home re-focuses its root when `isAlive` flips back to true because `autofocus`
     only fires on creation.
+
+## What would be improved with more time
+
+- **Real-device pass** on an Apple TV (a free personal team is enough): the simulator's
+  software GPU says nothing about frame rate or texture memory; the SolidTV demo's 60 fps on
+  an Apple TV HD is the only hardware number available.
+- **Native playback**: an `AVPlayer` view behind the "Play now" button on tvOS, with the web
+  keeping a `<video>` element — the host seam already has the shape for it.
+- **Automated runs of the verification scripts**: `remote-sim.sh` sequences and the web key
+  floods as a test job, asserting on the `FOCUS` lines and `__velope.countNodes()`.
+- **Regenerated MSDF atlases** with a full Latin charset (the em dash).
+- **A proper tvOS app icon** (layered `App Icon & Top Shelf Image` brand assets); the
+  simulator shows a blank tile today.
+- **Upstream reports**: the fetch polyfill's JSON handling to `@nativescript/canvas-polyfill`,
+  the guide/npm drift to `solid-tv/nativescript`, and the inherited-size culling trap to
+  `solid-tv/solid` (a warning when a translated container inherits its parent's size would
+  have saved the longest debugging session of this build).
