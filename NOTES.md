@@ -64,6 +64,8 @@ They are worth knowing about in any SolidTV / NativeScript-on-tvOS project (vers
     `Image` element path works on both, so the tvOS host sets `createImageBitmapSupport` to a
     value outside basic/options/full, which the renderer treats as "no createImageBitmap".
     Found with a dev-only probe that logs both decode paths with timeouts (`probeImagePipeline`).
+    The flip side: the `Image` path cannot load a `file://` atlas, so every text node vanished
+    on the device until the host started handing the MSDF atlas PNGs over as base64 data URLs.
 12. **Playback on tvOS is a presented `AVPlayerViewController`**, driven from the host through
     the same `AppPlayer` seam the web implements with a `<video>` element. The system player
     owns the Siri Remote while presented and Menu dismisses it without a callback, so the host
